@@ -1,0 +1,44 @@
+<<: !include secrets.yaml
+
+esphome:
+  name: alarm
+  platform: esp8266
+  board: nodemcu
+
+# Enable logging
+logger:
+
+
+captive_portal:
+
+binary_sensor:
+  - platform: gpio
+    name: "Arm"
+    pin:
+      number: D0
+      inverted: true
+      mode: INPUT_PULLUP
+  - platform: gpio
+    name: "Countdown"
+    pin:
+      number: D1
+      inverted: true
+      mode: INPUT_PULLUP
+  - platform: gpio
+    name: "Hallway PIR"
+    pin:
+      number: D2
+      inverted: true
+      mode: INPUT_PULLUP
+  - platform: gpio
+    name: "Landing PIR"
+    pin:
+      number: D3
+      inverted: true
+      mode: INPUT_PULLUP
+  - platform: gpio
+    name: "Siren"
+    pin:
+      number: D4
+      inverted: true
+      mode: INPUT_PULLUP
