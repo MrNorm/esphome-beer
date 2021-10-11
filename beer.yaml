@@ -1,44 +1,172 @@
 <<: !include secrets.yaml
 
 esphome:
-  name: alarm
+  name: beer
   platform: esp8266
   board: nodemcu
 
 # Enable logging
 logger:
-
+  level: DEBUG
 
 captive_portal:
 
-binary_sensor:
+dallas:
+  - pin: D3
+
+font:
+  - file: "fonts/vcr_osd_mono.ttf"
+    id: desc_font
+    size: 10
+  - file: "fonts/vcr_osd_mono.ttf"
+    id: large_font
+    size: 20
+  - file: "fonts/vcr_osd_mono.ttf"
+    id: title_font
+    size: 20
+
+sensor:
+  - platform: dallas
+    id: temp_hlt
+    address: 0x0C012044F783CA28
+    name: "Temperature #1"
+  - platform: dallas
+    id: temp_boiler
+    address: 0x1D012044FD1AE128
+    name: "Temperature #2"
+  - platform: dallas
+    id: temp_fermentation_fridge
+    address: 0xEB012044FC818D28
+    name: "Temperature #3"
+
+i2c:
+  sda: D2
+  scl: D1
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x64"
+    id: board_display
+    pages:
+      - id: hlt_target
+        lambda: |-
+          int hlt_percent = int(128 * (id(hlt_pid).current_temperature / id(hlt_pid).target_temperature));
+          it.filled_rectangle(0, 0, 128, 9);
+          it.printf(64, 0, id(desc_font), COLOR_OFF, TextAlign::TOP_CENTER, "HLT");
+
+          it.printf(0, 16, id(desc_font), TextAlign::LEFT, "TARGET");
+          it.printf(0, 37, id(desc_font), TextAlign::LEFT, "CURRENT");
+
+          it.printf(it.get_width(), 13, id(large_font), TextAlign::TOP_RIGHT, "%.1f°C", id(hlt_pid).target_temperature);
+          it.printf(it.get_width(), 34, id(large_font), TextAlign::TOP_RIGHT, "%.1f°C", id(hlt_pid).current_temperature);
+
+          it.filled_rectangle(0, 57, (hlt_percent < 128 ? hlt_percent : 128), 7);
+          it.rectangle(0, 57, 128, 7);
+      - id: fermentation_fridge_target
+        lambda: |-
+          it.filled_rectangle(0, 0, 128, 9);
+          
+          it.printf(64, 0, id(desc_font), COLOR_OFF, TextAlign::TOP_CENTER, "FERMENTATION FRIDGE");
+
+          it.printf(0, 16, id(desc_font), TextAlign::LEFT, "TARGET");
+          it.printf(0, 37, id(desc_font), TextAlign::LEFT, "CURRENT");
+
+          it.printf(it.get_width(), 13, id(large_font), TextAlign::TOP_RIGHT, "%.1f°C", id(fermentation_fridge_thermostat).target_temperature);
+          it.printf(it.get_width(), 34, id(large_font), TextAlign::TOP_RIGHT, "%.1f°C", id(fermentation_fridge_thermostat).current_temperature);
+
+          if (id(fermentation_fridge_thermostat).action = esphome::climate::ClimateAction::CLIMATE_ACTION_HEATING) {
+            int fridge_percent = int(128 * (id(fermentation_fridge_thermostat).current_temperature / id(fermentation_fridge_thermostat).target_temperature));
+            it.filled_rectangle(0, 57, (fridge_percent < 128 ? fridge_percent : 128), 7);
+          } else if (id(fermentation_fridge_thermostat).action = esphome::climate::ClimateAction::CLIMATE_ACTION_COOLING) {
+            int target_temp = (id(fermentation_fridge_thermostat).target_temperature + 100);
+            int current_temp = (id(fermentation_fridge_thermostat).current_temperature + 100);
+            int fridge_percent = int(128 * (target_temp / current_temp));
+            it.filled_rectangle(0, 57, (fridge_percent < 128 ? fridge_percent : 128), 7);
+          }
+
+          it.rectangle(0, 57, 128, 7);
+      - id: boiler_state
+        lambda: |-
+          float duty_float = float(id(boiler_duty).speed);
+          int duty_percent = int(128 * (duty_float / 100));
+          it.filled_rectangle(0, 0, 128, 9);
+          it.printf(64, 0, id(desc_font), COLOR_OFF, TextAlign::TOP_CENTER, "BOILER DUTY");
+
+          it.printf(0, 16, id(desc_font), TextAlign::LEFT, "TEMP");
+          it.printf(0, 37, id(desc_font), TextAlign::LEFT, "DUTY");
+
+          it.printf(it.get_width(), 13, id(large_font), TextAlign::TOP_RIGHT, "%.1f°C", id(temp_boiler).state);
+          it.printf(it.get_width(), 34, id(large_font), TextAlign::TOP_RIGHT, "%i%%", id(boiler_duty).speed);
+
+          it.filled_rectangle(0, 57, (duty_percent < 128 ? duty_percent : 128), 7);
+          it.rectangle(0, 57, 128, 7);
+
+interval:
+  - interval: 5s
+    then:
+      - display.page.show_next: board_display
+      - component.update: board_display
+
+switch:
   - platform: gpio
-    name: "Arm"
-    pin:
-      number: D0
-      inverted: true
-      mode: INPUT_PULLUP
+    pin: D6
+    id: beer_fermentation_cool
+    name: "Beer Fermentation Cool"
   - platform: gpio
-    name: "Countdown"
-    pin:
-      number: D1
-      inverted: true
-      mode: INPUT_PULLUP
-  - platform: gpio
-    name: "Hallway PIR"
-    pin:
-      number: D2
-      inverted: true
-      mode: INPUT_PULLUP
-  - platform: gpio
-    name: "Landing PIR"
-    pin:
-      number: D3
-      inverted: true
-      mode: INPUT_PULLUP
-  - platform: gpio
-    name: "Siren"
-    pin:
-      number: D4
-      inverted: true
-      mode: INPUT_PULLUP
+    pin: D8
+    id: beer_fermentation_heater
+    name: "Beer Fermentation Heater"
+
+climate:
+  - platform: pid
+    id: hlt_pid
+    name: "HLT PID"
+    sensor: temp_hlt
+    default_target_temperature: 21°C
+    heat_output: hlt_heater
+    control_parameters:
+      kp: 0.49460
+      ki: 0.00487
+      kd: 12.56301
+    visual:
+      min_temperature: 18 °C
+      max_temperature: 80 °C
+      temperature_step: 0.5 °C
+  - platform: thermostat
+    name: "Fermentation Fridge"
+    id: fermentation_fridge_thermostat
+    sensor: temp_fermentation_fridge
+    default_target_temperature_low: 20 °C
+    default_target_temperature_high: 22 °C
+    min_cooling_off_time: 300s
+    min_cooling_run_time: 300s
+    min_heating_off_time: 300s
+    min_heating_run_time: 300s
+    min_idle_time: 30s
+    cool_action:
+      - switch.turn_on: beer_fermentation_cool
+    heat_action:
+      - switch.turn_on: beer_fermentation_heater
+    idle_action:
+      - switch.turn_off: beer_fermentation_cool
+      - switch.turn_off: beer_fermentation_heater
+    visual:
+      min_temperature: 0 °C
+      max_temperature: 50 °C
+      temperature_step: 0.5 °C
+
+output:
+  - platform: slow_pwm
+    pin: D4
+    id: boiler_heater
+    period: 2s
+  - platform: esp8266_pwm
+    pin: D5
+    id: hlt_heater
+
+
+fan:
+  - platform: speed
+    output: boiler_heater
+    id: boiler_duty
+    name: "Boiler Heater"
