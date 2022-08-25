@@ -12,158 +12,97 @@ logger:
 captive_portal:
 
 dallas:
-  - pin: D3
-
-font:
-  - file: "fonts/vcr_osd_mono.ttf"
-    id: desc_font
-    size: 10
-  - file: "fonts/vcr_osd_mono.ttf"
-    id: large_font
-    size: 20
-  - file: "fonts/vcr_osd_mono.ttf"
-    id: title_font
-    size: 20
+  - pin: D7
+    update_interval: 10s
 
 sensor:
   - platform: dallas
-    id: temp_hlt
-    address: 0x0C012044F783CA28
-    name: "Temperature #1"
+    id: temp_hlt_tank
+    address: 0x14000009079e2828
+    name: "HLT Tank"
   - platform: dallas
-    id: temp_boiler
-    address: 0x1D012044FD1AE128
-    name: "Temperature #2"
+    id: temp_hlt_herms_out
+    address: 0x4700000907f6a128
+    name: "HLT HERMS Out"
   - platform: dallas
-    id: temp_fermentation_fridge
-    address: 0xEB012044FC818D28
-    name: "Temperature #3"
-
-i2c:
-  sda: D2
-  scl: D1
-
-display:
-  - platform: ssd1306_i2c
-    model: "SSD1306 128x64"
-    id: board_display
-    pages:
-      - id: hlt_target
-        lambda: |-
-          int hlt_percent = int(128 * (id(hlt_pid).current_temperature / id(hlt_pid).target_temperature));
-          it.filled_rectangle(0, 0, 128, 9);
-          it.printf(64, 0, id(desc_font), COLOR_OFF, TextAlign::TOP_CENTER, "HLT");
-
-          it.printf(0, 16, id(desc_font), TextAlign::LEFT, "TARGET");
-          it.printf(0, 37, id(desc_font), TextAlign::LEFT, "CURRENT");
-
-          it.printf(it.get_width(), 13, id(large_font), TextAlign::TOP_RIGHT, "%.1f°C", id(hlt_pid).target_temperature);
-          it.printf(it.get_width(), 34, id(large_font), TextAlign::TOP_RIGHT, "%.1f°C", id(hlt_pid).current_temperature);
-
-          it.filled_rectangle(0, 57, (hlt_percent < 128 ? hlt_percent : 128), 7);
-          it.rectangle(0, 57, 128, 7);
-      - id: fermentation_fridge_target
-        lambda: |-
-          it.filled_rectangle(0, 0, 128, 9);
-          
-          it.printf(64, 0, id(desc_font), COLOR_OFF, TextAlign::TOP_CENTER, "FERMENTATION FRIDGE");
-
-          it.printf(0, 16, id(desc_font), TextAlign::LEFT, "TARGET");
-          it.printf(0, 37, id(desc_font), TextAlign::LEFT, "CURRENT");
-
-          it.printf(it.get_width(), 13, id(large_font), TextAlign::TOP_RIGHT, "%.1f°C", id(fermentation_fridge_thermostat).target_temperature);
-          it.printf(it.get_width(), 34, id(large_font), TextAlign::TOP_RIGHT, "%.1f°C", id(fermentation_fridge_thermostat).current_temperature);
-
-          if (id(fermentation_fridge_thermostat).action = esphome::climate::ClimateAction::CLIMATE_ACTION_HEATING) {
-            int fridge_percent = int(128 * (id(fermentation_fridge_thermostat).current_temperature / id(fermentation_fridge_thermostat).target_temperature));
-            it.filled_rectangle(0, 57, (fridge_percent < 128 ? fridge_percent : 128), 7);
-          } else if (id(fermentation_fridge_thermostat).action = esphome::climate::ClimateAction::CLIMATE_ACTION_COOLING) {
-            int target_temp = (id(fermentation_fridge_thermostat).target_temperature + 100);
-            int current_temp = (id(fermentation_fridge_thermostat).current_temperature + 100);
-            int fridge_percent = int(128 * (target_temp / current_temp));
-            it.filled_rectangle(0, 57, (fridge_percent < 128 ? fridge_percent : 128), 7);
-          }
-
-          it.rectangle(0, 57, 128, 7);
-      - id: boiler_state
-        lambda: |-
-          float duty_float = float(id(boiler_duty).speed);
-          int duty_percent = int(128 * (duty_float / 100));
-          it.filled_rectangle(0, 0, 128, 9);
-          it.printf(64, 0, id(desc_font), COLOR_OFF, TextAlign::TOP_CENTER, "BOILER DUTY");
-
-          it.printf(0, 16, id(desc_font), TextAlign::LEFT, "TEMP");
-          it.printf(0, 37, id(desc_font), TextAlign::LEFT, "DUTY");
-
-          it.printf(it.get_width(), 13, id(large_font), TextAlign::TOP_RIGHT, "%.1f°C", id(temp_boiler).state);
-          it.printf(it.get_width(), 34, id(large_font), TextAlign::TOP_RIGHT, "%i%%", id(boiler_duty).speed);
-
-          it.filled_rectangle(0, 57, (duty_percent < 128 ? duty_percent : 128), 7);
-          it.rectangle(0, 57, 128, 7);
-
-interval:
-  - interval: 5s
-    then:
-      - display.page.show_next: board_display
-      - component.update: board_display
+    id: temp_fermentation_tank
+    address: 0xc90315546ce1ff28
+    name: "Fermentation Tank"
+  - platform: dallas
+    id: temp_mash_tun
+    address: 0x4d0315543d57ff28
+    name: "Mash Tun"
 
 switch:
   - platform: gpio
     pin: D6
-    id: beer_fermentation_cool
-    name: "Beer Fermentation Cool"
+    name: "HLT Pump"
+    id: hlt_pump
+    restore_mode: ALWAYS_OFF
+    inverted: true
   - platform: gpio
-    pin: D8
-    id: beer_fermentation_heater
-    name: "Beer Fermentation Heater"
-
+    pin: D5
+    name: "Mash Pump"
+    id: mash_pump
+    restore_mode: ALWAYS_OFF
+    inverted: true
+  - platform: gpio
+    pin: D4
+    name: "Boiler Pump"
+    id: boiler_pump
+    restore_mode: ALWAYS_OFF
+    inverted: true
+  - platform: gpio
+    pin: D3
+    name: "Extractor Fan"
+    id: extractor_fan
+    restore_mode: ALWAYS_OFF
+    inverted: true
+  - platform: gpio
+    pin: D0
+    name: "Fermenter Heater"
+    id: fermenter_heater
+    restore_mode: ALWAYS_OFF
 climate:
   - platform: pid
     id: hlt_pid
     name: "HLT PID"
-    sensor: temp_hlt
-    default_target_temperature: 21°C
+    sensor: temp_hlt_tank
+    default_target_temperature: 1°C
     heat_output: hlt_heater
     control_parameters:
       kp: 0.49460
       ki: 0.00487
       kd: 12.56301
     visual:
-      min_temperature: 18 °C
       max_temperature: 80 °C
-      temperature_step: 0.5 °C
+      temperature_step: 1 °C
   - platform: thermostat
-    name: "Fermentation Fridge"
-    id: fermentation_fridge_thermostat
-    sensor: temp_fermentation_fridge
-    default_target_temperature_low: 20 °C
-    default_target_temperature_high: 22 °C
-    min_cooling_off_time: 300s
+    name: "Fermentation Controller"
+    id: fermentation_controller
+    sensor: temp_fermentation_tank
+    default_target_temperature_low: 18 °C
+    default_target_temperature_high: 20 °C
+    min_cooling_off_time: 30s
     min_cooling_run_time: 300s
-    min_heating_off_time: 300s
-    min_heating_run_time: 300s
+    min_heating_off_time: 30s
+    min_heating_run_time: 30s
     min_idle_time: 30s
     cool_action:
-      - switch.turn_on: beer_fermentation_cool
+      - switch.turn_off: fermenter_heater
     heat_action:
-      - switch.turn_on: beer_fermentation_heater
+      - switch.turn_on: fermenter_heater
     idle_action:
-      - switch.turn_off: beer_fermentation_cool
-      - switch.turn_off: beer_fermentation_heater
-    visual:
-      min_temperature: 0 °C
-      max_temperature: 50 °C
-      temperature_step: 0.5 °C
+      - switch.turn_off: fermenter_heater
 
 output:
   - platform: slow_pwm
-    pin: D4
+    pin: D2
     id: boiler_heater
     period: 2s
   - platform: esp8266_pwm
-    pin: D5
+    pin: D1
     id: hlt_heater
-
 
 fan:
   - platform: speed
