@@ -11,6 +11,13 @@ logger:
 
 captive_portal:
 
+web_server:
+  port: 80
+  local: true
+  auth:
+    username: admin
+    password: !secret web_server_password
+
 dallas:
   - pin: D7
     update_interval: 10s
